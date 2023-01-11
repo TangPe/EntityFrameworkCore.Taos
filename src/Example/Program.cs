@@ -245,6 +245,14 @@ namespace TaosADODemo
                 var rest = insert.ExecuteNonQuery();
             }
         }
+        public class TdDataHistory
+        {
+            public DateTime ts { get; set; }
+
+            public double? value { get; set; }
+
+            public string tbname { get; set; }
+        }
 
         private static void ExecSqlByWebSocket(TaosConnectionStringBuilder builder)
         {
@@ -350,6 +358,31 @@ namespace TaosADODemo
                 Console.WriteLine("ServerVersion:{0}", connection.ServerVersion);
                 connection.DatabaseExists(database);
                 Console.WriteLine("create {0} {1}", database, connection.CreateCommand($"create database if not exists {database};").ExecuteNonQuery());
+
+                #region 测试ToObject
+
+                var tbname = "data_319400013";
+                Console.WriteLine("create table t {0} {1}", database, connection.CreateCommand($"CREATE TABLE {database}.`data` (`ts` TIMESTAMP,`val` DOUBLE) TAGS (`info` JSON);").ExecuteNonQuery());
+
+                var valuesStr = "";
+                Random r = new Random();
+                for (var startTime = Convert.ToDateTime("2021-06-09 10:00:00"); startTime < Convert.ToDateTime("2021-06-09 11:00:00"); startTime = startTime.AddMinutes(5))
+                {
+                    valuesStr += $"('{startTime.ToString("yyyy-MM-dd HH:mm:ss")}',{r.Next(30, 40)})";
+                }
+
+                Console.WriteLine("insert into t values  {0}  ", connection.CreateCommand($"INSERT INTO {tbname} USING data(info) TAGS('{{\"k1\": \"v1\"}}') VALUES {valuesStr};").ExecuteNonQuery());
+
+                using (var com = connection.CreateCommand($"select first(val) value from data where ts>='2021-06-09 10:01:00' and ts<'2021-06-09 11:00:00' and tbname in ('{tbname}') INTERVAL(9m,4m) FILL(NULL)"))
+                {
+                    using (var dr = com.ExecuteReader())
+                    {
+                        var result = dr.ToObject<TdDataHistory>();
+                    }
+                }
+
+                #endregion 测试ToObject
+
                 Console.WriteLine("create table t {0} {1}", database, connection.CreateCommand($"create table {database}.t (ts timestamp, cdata binary(255));").ExecuteNonQuery());
                 Console.WriteLine("insert into t values  {0}  ", connection.CreateCommand($"insert into {database}.t values ({(long)(DateTime.Now.Subtract(new DateTime(1970, 1, 1, 0, 0, 0, 0)).TotalMilliseconds)}, 10);").ExecuteNonQuery());
                 Console.WriteLine("create {0} {1}", database, connection.CreateCommand($"use {database};").ExecuteNonQuery());
